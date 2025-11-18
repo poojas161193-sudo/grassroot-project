@@ -1,0 +1,206 @@
+# ============================================
+# Video Analyzer AI - Git Ignore File
+# ============================================
+
+# ============================================
+# SENSITIVE FILES - NEVER COMMIT
+# ============================================
+.env
+*.key
+*.pem
+*.p12
+credentials.json
+secrets.yaml
+
+# ============================================
+# PYTHON
+# ============================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================
+# DATABASE
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+video_analyzer.db
+backend/video_analyzer.db
+
+# Database migrations (keep migration scripts, not the database)
+# migrations/versions/*.pyc
+
+# ============================================
+# VIDEO FILES & UPLOADS
+# ============================================
+uploads/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+*.webm
+
+# Audio files (temporary)
+*.wav
+*.mp3
+*.aac
+*.m4a
+
+# ============================================
+# LOGS
+# ============================================
+*.log
+logs/
+*.log.*
+
+# ============================================
+# IDE / EDITORS
+# ============================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================
+# OS FILES
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================
+# NODE / NPM (if you add frontend build tools)
+# ============================================
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# ============================================
+# TEMPORARY FILES
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+
+# ============================================
+# CACHE
+# ============================================
+.cache/
+*.cache
+chroma_db/
+
+# ============================================
+# DOCUMENTATION BUILD
+# ============================================
+docs/_build/
+docs/.doctrees/
+
+# ============================================
+# TESTING
+# ============================================
+.tox/
+.coverage
+htmlcov/
+test_uploads/
+
+# ============================================
+# DEPLOYMENT
+# ============================================
+*.pid
+*.sock
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# ============================================
+# KEEP THESE FILES (override above ignores)
+# ============================================
+# Example environment file
+!.env.example
+
+# Example configuration
+!config.example.json
+
+# Sample test files (if any)
+!test_samples/
