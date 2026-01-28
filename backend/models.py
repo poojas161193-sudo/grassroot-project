@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -29,7 +29,11 @@ class Video(Base):
     detected_language = Column(String(10), nullable=True)       # Auto-detected language (ISO 639-1 code: 'en', 'ja', etc.)
     user_selected_language = Column(String(10), nullable=True)  # User override language
     ui_language = Column(String(10), default='en')              # Language for summaries/UI responses
-    transcription_method = Column(String(50), nullable=True)    # Transcription method used (azure_speech/azure_whisper/local_whisper)
+    transcription_method = Column(String(50), nullable=True)    # Transcription method used (gpt-4o-transcribe)
+
+    # Audio summary fields (TTS-1-HD)
+    audio_summary_path = Column(String, nullable=True)          # Path to generated TTS audio file
+    audio_summary_duration = Column(Float, nullable=True)       # Duration of audio summary in seconds
 
 
 class ChatHistory(Base):

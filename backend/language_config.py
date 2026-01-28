@@ -3,21 +3,17 @@ Multi-language configuration and utilities
 Supports English (default) and Japanese
 """
 
-# Supported languages with Azure and Whisper mappings
+# Supported languages
 SUPPORTED_LANGUAGES = {
     'en': {
         'name': 'English',
         'native_name': 'English',
-        'azure_code': 'en-US',
-        'whisper_code': 'en',
         'flag': '🇺🇸',
         'enabled': True
     },
     'ja': {
         'name': 'Japanese',
         'native_name': '日本語',
-        'azure_code': 'ja-JP',
-        'whisper_code': 'ja',
         'flag': '🇯🇵',
         'enabled': True
     }
@@ -25,32 +21,6 @@ SUPPORTED_LANGUAGES = {
 
 DEFAULT_LANGUAGE = 'en'
 DEFAULT_UI_LANGUAGE = 'en'
-
-
-def get_azure_language_code(lang_code: str) -> str:
-    """
-    Get Azure Speech Services language code from ISO 639-1 code
-
-    Args:
-        lang_code: ISO 639-1 code ('en', 'ja')
-
-    Returns:
-        Azure language code ('en-US', 'ja-JP')
-    """
-    return SUPPORTED_LANGUAGES.get(lang_code, SUPPORTED_LANGUAGES['en'])['azure_code']
-
-
-def get_whisper_language_code(lang_code: str) -> str:
-    """
-    Get Whisper language code from ISO 639-1 code
-
-    Args:
-        lang_code: ISO 639-1 code ('en', 'ja')
-
-    Returns:
-        Whisper language code ('en', 'ja')
-    """
-    return SUPPORTED_LANGUAGES.get(lang_code, SUPPORTED_LANGUAGES['en'])['whisper_code']
 
 
 def get_language_name(lang_code: str) -> str:
@@ -87,10 +57,3 @@ def get_enabled_languages() -> dict:
         Dictionary of enabled languages
     """
     return {k: v for k, v in SUPPORTED_LANGUAGES.items() if v['enabled']}
-
-
-# Language detection candidates for Azure Speech
-# Azure supports max 4 candidates at once, we only have 2
-AZURE_LANGUAGE_CANDIDATES = [
-    lang['azure_code'] for lang in SUPPORTED_LANGUAGES.values() if lang['enabled']
-]

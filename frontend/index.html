@@ -44,7 +44,38 @@
             font-size: 1.2em;
             opacity: 0.9;
         }
-        
+
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .nav-btn {
+            padding: 10px 25px;
+            border: 2px solid white;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .nav-btn:hover {
+            background: white;
+            color: #ff008c;
+        }
+
+        .nav-btn.active {
+            background: white;
+            color: #ff008c;
+        }
+
         .main-content {
             padding: 40px;
         }
@@ -483,6 +514,148 @@
             padding: 10px;
         }
 
+        .audio-summary-section {
+            margin-top: 25px;
+            padding: 20px;
+            background: linear-gradient(135deg, #fff0f8 0%, #ffebf4 25%, #ffe6f3 50%, #ffeff8 75%, #f8f0ff 100%);
+            border-radius: 10px;
+            border: 2px solid #ff008c;
+            box-shadow: 0 2px 10px rgba(255, 0, 140, 0.1);
+        }
+
+        .audio-summary-section h4 {
+            background: linear-gradient(135deg, #ff008c 0%, #ff1a96 30%, #ff3399 60%, #ff4da6 82%, #cc66bb 92%, #9933ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .audio-player-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #audioPlayer {
+            width: 100%;
+            border-radius: 8px;
+            outline: none;
+            background: linear-gradient(to right, #ffffff 0%, #fff8fc 100%);
+        }
+
+        .audio-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .audio-duration {
+            font-weight: 600;
+            color: #ff008c;
+        }
+
+        /* Progress Indicator Styles */
+        .progress-container {
+            margin-top: 30px;
+            padding: 30px;
+            background: linear-gradient(135deg, #fff0f8 0%, #ffebf4 25%, #ffe6f3 50%, #ffeff8 75%, #f8f0ff 100%);
+            border-radius: 15px;
+            border: 2px solid #ff008c;
+            box-shadow: 0 4px 20px rgba(255, 0, 140, 0.2);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .progress-title {
+            background: linear-gradient(135deg, #ff008c 0%, #ff1a96 30%, #ff3399 60%, #ff4da6 82%, #cc66bb 92%, #9933ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 1.3em;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+        }
+
+        #progressIcon {
+            font-size: 1.2em;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .progress-percentage {
+            font-size: 1.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, #ff008c 0%, #ff1a96 30%, #ff3399 60%, #ff4da6 82%, #cc66bb 92%, #9933ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 25px;
+            box-shadow: inset 0 2px 5px rgba(255, 0, 140, 0.1);
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #ff008c 0%, #ff1a96 25%, #ff3399 50%, #ff4da6 75%, #9933ff 100%);
+            border-radius: 20px;
+            transition: width 0.5s ease;
+            box-shadow: 0 2px 10px rgba(255, 0, 140, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.3),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 padding: 20px;
@@ -518,6 +691,24 @@
                 width: 100%;
                 justify-content: center;
             }
+
+            .progress-container {
+                padding: 20px;
+            }
+
+            .progress-stages {
+                grid-template-columns: 1fr;
+            }
+
+            .progress-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .progress-percentage {
+                align-self: flex-end;
+            }
         }
     </style>
 </head>
@@ -526,6 +717,12 @@
         <div class="header">
             <h1>🎬 <span data-i18n="appTitle">Video Analyzer AI</span></h1>
             <p data-i18n="appSubtitle">Upload, Transcribe, Analyze with AI</p>
+
+            <div class="nav-buttons">
+                <a href="index.html" class="nav-btn active">📹 Video Analyzer</a>
+                <a href="course-builder.html" class="nav-btn">🎓 Course Builder</a>
+                <a href="course-manager.html" class="nav-btn">📚 Course Manager</a>
+            </div>
 
             <div class="language-selector-container">
                 <div class="language-selector">
@@ -554,8 +751,21 @@
                     <div class="upload-hint" data-i18n="uploadHint">Supports MP4, AVI, MOV, and more</div>
                 </div>
                 <input type="file" id="fileInput" accept="video/*">
-                <div id="loadingDiv" class="loading" style="display: none;">
-                    <span data-i18n="processing">Processing video... This may take a few minutes.</span>
+
+                <!-- Progress Indicator with Stages -->
+                <div id="progressContainer" class="progress-container" style="display: none;">
+                    <div class="progress-header">
+                        <h3 class="progress-title">
+                            <span id="progressIcon">⏳</span>
+                            <span id="progressText" data-i18n="processing">Processing Video</span>
+                        </h3>
+                        <span id="progressPercentage" class="progress-percentage">0%</span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="progress-bar-container">
+                        <div id="progressBar" class="progress-bar"></div>
+                    </div>
                 </div>
             </div>
             
@@ -564,16 +774,29 @@
                 <div id="videoDetails"></div>
                 <div id="videoSummary" class="summary-box"></div>
 
+                <!-- Audio Summary Player -->
+                <div id="audioSummarySection" class="audio-summary-section" style="display: none;">
+                    <h4>🔊 <span data-i18n="audioSummary">Audio Summary</span></h4>
+                    <div class="audio-player-container">
+                        <audio id="audioPlayer" controls preload="metadata">
+                            Your browser does not support the audio element.
+                        </audio>
+                        <div class="audio-info">
+                            <span id="audioDuration" class="audio-duration"></span>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="suggestionChips" class="suggestion-chips" style="display: none;">
                     <h4>💡 <span data-i18n="quickActions">Quick Actions</span></h4>
                     <div class="chips-container">
-                        <button class="chip" data-question="Create 10 Question-Answer pairs from the video content">
+                        <button class="chip" data-question-key="create10QAQuestion">
                             <span>❓</span> <span data-i18n="create10QA">Create 10 Q&A</span>
                         </button>
-                        <button class="chip" data-question="List 10 key highlighted points from the video">
+                        <button class="chip" data-question-key="keyPointsQuestion">
                             <span>✨</span> <span data-i18n="keyPoints">10 Key Points</span>
                         </button>
-                        <button class="chip" data-question="Provide a detailed summary of the video">
+                        <button class="chip" data-question-key="detailedSummaryQuestion">
                             <span>📝</span> <span data-i18n="detailedSummary">Detailed Summary</span>
                         </button>
                         <button class="chip ask-custom" onclick="videoAnalyzer.enableCustomQuestion()">

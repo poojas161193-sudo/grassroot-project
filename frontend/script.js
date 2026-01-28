@@ -5,6 +5,8 @@ let videoAnalyzer = null;
 
 class VideoAnalyzer {
     constructor() {
+        this.progressStages = ['upload', 'extracting', 'transcribing', 'summarizing', 'audio'];
+        this.currentStageIndex = 0;
         this.initializeLanguageManager();
         this.initializeEventListeners();
         this.setupDragAndDrop();
@@ -55,10 +57,12 @@ class VideoAnalyzer {
     }
 
     setupSuggestionChips() {
-        const chips = document.querySelectorAll('.chip[data-question]');
+        const chips = document.querySelectorAll('.chip[data-question-key]');
         chips.forEach(chip => {
             chip.addEventListener('click', () => {
-                const question = chip.getAttribute('data-question');
+                const questionKey = chip.getAttribute('data-question-key');
+                // Get translated question based on current UI language
+                const question = i18n.t(questionKey);
                 this.askPredefinedQuestion(question);
             });
         });
@@ -94,8 +98,11 @@ class VideoAnalyzer {
             return;
         }
 
-        this.showLoading(true, i18n.t('uploading'));
+        this.showProgress(true);
         this.hideError();
+
+        // Stage 0: Upload
+        this.advanceToStage(0);
 
         try {
             const formData = new FormData();
@@ -123,9 +130,8 @@ class VideoAnalyzer {
             const data = await response.json();
             currentVideoId = data.video_id;
 
-            // Show success message and start polling for processing status
-            this.showSuccess(i18n.t('uploadSuccess'));
-            this.showLoading(true, i18n.t('processing'));
+            // Upload complete, move to extracting stage
+            this.advanceToStage(1); // Extracting audio
 
             // Poll for processing status
             await this.pollProcessingStatus(currentVideoId);
@@ -133,13 +139,14 @@ class VideoAnalyzer {
         } catch (error) {
             console.error('Error uploading video:', error);
             this.showError(`${i18n.t('error')}: ${error.message}`);
-            this.showLoading(false);
+            this.showProgress(false);
         }
     }
 
     async pollProcessingStatus(videoId) {
         const maxAttempts = 60; // Poll for up to 10 minutes (60 * 10 seconds)
         let attempts = 0;
+        let lastStage = 1; // Start from extracting (upload is already done)
 
         const poll = async () => {
             try {
@@ -153,18 +160,34 @@ class VideoAnalyzer {
                 const data = await response.json();
                 console.log('Received status data:', data);
 
+                // Update progress based on attempts (simulate stages)
+                if (attempts === 1) {
+                    this.advanceToStage(2); // Transcribing
+                    lastStage = 2;
+                } else if (attempts === 3 && lastStage < 3) {
+                    this.advanceToStage(3); // Summarizing
+                    lastStage = 3;
+                } else if (attempts === 5 && lastStage < 4) {
+                    this.advanceToStage(4); // Audio generation
+                    lastStage = 4;
+                }
+
                 if (data.processing_status === 'completed') {
                     // Processing complete, display results
                     console.log('Processing completed! Summary length:', data.summary ? data.summary.length : 0);
-                    this.showLoading(false);
-                    this.displayVideoInfo(data);
-                    this.showChatSection();
-                    this.showSuccess(i18n.t('processingComplete'));
+                    this.completeAllStages();
+
+                    setTimeout(() => {
+                        this.showProgress(false);
+                        this.displayVideoInfo(data);
+                        this.showChatSection();
+                        this.showSuccess(i18n.t('processingComplete'));
+                    }, 1000);
                     return;
                 } else if (data.processing_status === 'failed') {
                     // Processing failed
                     console.error('Processing failed:', data.error_message);
-                    this.showLoading(false);
+                    this.showProgress(false);
                     this.showError(`${i18n.t('error')}: ${data.error_message || 'Unknown error'}`);
                     return;
                 } else if (data.processing_status === 'processing' || data.processing_status === 'pending') {
@@ -174,13 +197,13 @@ class VideoAnalyzer {
                         setTimeout(poll, 5000); // Poll every 5 seconds
                     } else {
                         console.error('Processing timeout after', attempts, 'attempts');
-                        this.showLoading(false);
+                        this.showProgress(false);
                         this.showError('Processing timeout. Please refresh and try again.');
                     }
                 }
             } catch (error) {
                 console.error('Error checking status:', error);
-                this.showLoading(false);
+                this.showProgress(false);
                 this.showError('Failed to check processing status. Please refresh.');
             }
         };
@@ -266,6 +289,28 @@ class VideoAnalyzer {
         videoDetails.innerHTML = detailsHTML;
         videoSummary.innerHTML = `<p style="line-height: 1.6; white-space: pre-wrap;">${escapedSummary}</p>`;
 
+        // Handle audio summary if available
+        if (data.audio_summary_path && data.audio_summary_duration) {
+            const audioSection = document.getElementById('audioSummarySection');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const audioDuration = document.getElementById('audioDuration');
+
+            // Set audio source
+            audioPlayer.src = `${API_BASE_URL}/audio-summary/${currentVideoId}`;
+
+            // Display duration
+            const minutes = Math.floor(data.audio_summary_duration / 60);
+            const seconds = Math.floor(data.audio_summary_duration % 60);
+            audioDuration.textContent = `Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+            // Show audio section
+            audioSection.style.display = 'block';
+            console.log('Audio summary loaded:', audioPlayer.src);
+        } else {
+            // Hide audio section if no audio summary
+            document.getElementById('audioSummarySection').style.display = 'none';
+        }
+
         videoInfo.style.display = 'block';
 
         // Show suggestion chips only if processing is complete
@@ -299,7 +344,8 @@ class VideoAnalyzer {
         try {
             // Add UI language parameter to URL
             const url = new URL(`${API_BASE_URL}/ask-question/`);
-            url.searchParams.append('ui_language', i18n.getUILanguage());
+            const uiLanguage = i18n.getUILanguage();
+            url.searchParams.append('ui_language', uiLanguage);
 
             const response = await fetch(url.toString(), {
                 method: 'POST',
@@ -411,19 +457,65 @@ class VideoAnalyzer {
         }
     }
 
-    showLoading(show, message = 'Processing your video... This may take a few minutes') {
-        const loadingDiv = document.getElementById('loadingDiv');
+    showProgress(show) {
+        const progressContainer = document.getElementById('progressContainer');
         const uploadArea = document.querySelector('.upload-area');
 
         if (show) {
-            loadingDiv.textContent = message;
-            loadingDiv.style.display = 'block';
+            progressContainer.style.display = 'block';
             uploadArea.style.opacity = '0.5';
             uploadArea.style.pointerEvents = 'none';
+            this.resetProgress();
         } else {
-            loadingDiv.style.display = 'none';
+            progressContainer.style.display = 'none';
             uploadArea.style.opacity = '1';
             uploadArea.style.pointerEvents = 'auto';
+        }
+    }
+
+    resetProgress() {
+        this.currentStageIndex = 0;
+        this.updateProgress(0);
+
+        // Reset progress icon and text
+        document.getElementById('progressIcon').textContent = '⏳';
+        document.getElementById('progressText').textContent = i18n.t('processing') || 'Processing Video';
+    }
+
+    updateProgress(percentage) {
+        const progressBar = document.getElementById('progressBar');
+        const progressPercentage = document.getElementById('progressPercentage');
+
+        progressBar.style.width = percentage + '%';
+        progressPercentage.textContent = Math.round(percentage) + '%';
+    }
+
+    setStage(stageName, status) {
+        // Stage elements removed - keeping method for compatibility
+        // Progress is now tracked only via progress bar percentage
+    }
+
+    advanceToStage(stageIndex) {
+        // Update progress bar based on stage (each stage is 20%)
+        if (stageIndex < this.progressStages.length) {
+            this.currentStageIndex = stageIndex;
+            const progress = (stageIndex / this.progressStages.length) * 100;
+            this.updateProgress(progress);
+        }
+    }
+
+    completeAllStages() {
+        this.updateProgress(100);
+        document.getElementById('progressIcon').textContent = '✅';
+        document.getElementById('progressText').textContent = i18n.t('completed') || 'Processing Complete!';
+    }
+
+    showLoading(show, message) {
+        // Keep for compatibility, but redirect to progress indicator
+        if (show) {
+            this.showProgress(true);
+        } else {
+            this.showProgress(false);
         }
     }
 

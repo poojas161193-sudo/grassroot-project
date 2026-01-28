@@ -2,13 +2,8 @@ import os
 from openai import OpenAI
 from moviepy.editor import VideoFileClip
 from decouple import config
-import azure.cognitiveservices.speech as speechsdk
-from language_config import (
-    get_azure_language_code,
-    get_whisper_language_code,
-    get_language_name,
-    AZURE_LANGUAGE_CANDIDATES
-)
+from mutagen.mp3 import MP3
+from language_config import get_language_name
 
 client = OpenAI(
     api_key=config('OPENAI_API_KEY'),
@@ -22,210 +17,178 @@ class VideoProcessor:
         if not os.path.exists(self.upload_dir):
             os.makedirs(self.upload_dir)
 
+    def _contains_japanese_chars(self, text: str) -> bool:
+        """
+        Check if text contains Japanese characters (Hiragana, Katakana, Kanji)
+
+        Args:
+            text: Text to check
+
+        Returns:
+            True if text contains Japanese characters, False otherwise
+        """
+        if not text:
+            return False
+
+        # Japanese Unicode ranges:
+        # Hiragana: \u3040-\u309F
+        # Katakana: \u30A0-\u30FF
+        # Kanji (CJK Unified Ideographs): \u4E00-\u9FFF
+        import re
+        japanese_pattern = re.compile(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]+')
+        return bool(japanese_pattern.search(text))
+
     def extract_audio_from_video(self, video_path: str) -> str:
-        """Extract audio from video file and save as WAV with optimization"""
+        """Extract audio from video file and save as M4A with optimization for API limits"""
         try:
             video = VideoFileClip(video_path)
-            audio_path = video_path.rsplit('.', 1)[0] + '.wav'
+            audio_path = video_path.rsplit('.', 1)[0] + '.m4a'
 
-            # Extract audio with lower quality settings for faster processing
+            # Extract audio as M4A (AAC codec) with optimized settings
+            # M4A/AAC provides better compression and compatibility with OpenAI API
             # 16kHz sample rate is sufficient for speech recognition
             video.audio.write_audiofile(
                 audio_path,
-                fps=16000,  # Lower sample rate for faster processing
-                nbytes=2,   # 16-bit audio
-                codec='pcm_s16le',  # Uncompressed PCM for compatibility
+                fps=16000,      # 16kHz sample rate for speech
+                nbytes=2,       # 16-bit audio
+                codec='aac',    # AAC codec in M4A container
+                bitrate='32k',  # Low bitrate (32kbps) to minimize file size
                 verbose=False,
-                logger=None,
-                bitrate='64k'  # Lower bitrate
+                logger=None
             )
             video.close()
             return audio_path
         except Exception as e:
             raise Exception(f"Failed to extract audio: {str(e)}")
 
-    def detect_language(self, audio_path: str) -> str:
+    def transcribe_with_gpt4o(self, audio_path: str, language: str = 'auto') -> tuple:
         """
-        Detect language from audio using Azure Speech Services
+        Transcribe audio using GPT-4o via Rakuten AI Gateway
 
         Args:
             audio_path: Path to audio file
+            language: ISO 639-1 language code ('en', 'ja', 'auto' for auto-detection)
 
         Returns:
-            ISO 639-1 language code ('en', 'ja')
+            Tuple of (transcription_text, detected_language)
         """
         try:
-            speech_key = config('AZURE_SPEACH_KEY')
-            service_region = config('AZURE_REGION', default='eastus')
+            transcription_model = config('TRANSCRIPTION_MODEL', default='gpt-4o-transcribe')
+            transcription_language = language if language != 'auto' else config('TRANSCRIPTION_LANGUAGE', default='auto')
 
-            speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-
-            # Configure auto-detect with supported languages (English and Japanese)
-            auto_detect_source_language_config = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(
-                languages=AZURE_LANGUAGE_CANDIDATES  # ['en-US', 'ja-JP']
-            )
-
-            audio_config = speechsdk.audio.AudioConfig(filename=audio_path)
-
-            # Create recognizer with language detection
-            source_language_recognizer = speechsdk.SourceLanguageRecognizer(
-                speech_config=speech_config,
-                auto_detect_source_language_config=auto_detect_source_language_config,
-                audio_config=audio_config
-            )
-
-            print("🔍 Detecting language from audio...")
-            result = source_language_recognizer.recognize_once()
-
-            if result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                detected = result.properties[
-                    speechsdk.PropertyId.SpeechServiceConnection_AutoDetectSourceLanguageResult
-                ]
-                # Convert 'en-US' to 'en', 'ja-JP' to 'ja'
-                lang_code = detected.split('-')[0] if detected else 'en'
-                print(f"✅ Language detected: {lang_code} ({get_language_name(lang_code)})")
-                return lang_code
+            print(f"🎤 Starting transcription using {transcription_model}...")
+            if transcription_language != 'auto':
+                print(f"   Language: {get_language_name(transcription_language)}")
             else:
-                print(f"⚠️  Language detection failed, defaulting to English")
-                return 'en'
+                print(f"   Language: Auto-detect")
+
+            # Call GPT-4o transcription via Rakuten AI Gateway
+            # Check file size (API limit is 25MB)
+            file_size_mb = os.path.getsize(audio_path) / (1024*1024)
+            print(f"   API Request Details:")
+            print(f"   - Model: {transcription_model}")
+            print(f"   - Language: {transcription_language if transcription_language != 'auto' else 'auto-detect (parameter omitted)'}")
+            print(f"   - File: {os.path.basename(audio_path)}")
+            print(f"   - File size: {file_size_mb:.2f} MB")
+
+            if file_size_mb > 25:
+                raise Exception(f"Audio file size ({file_size_mb:.2f} MB) exceeds 25MB API limit. Please use a shorter video.")
+
+            # Open file - must pass actual file path for proper multipart encoding
+            # The SDK needs the filename to create the multipart/form-data correctly
+            from pathlib import Path
+
+            try:
+                if transcription_language != 'auto':
+                    with open(audio_path, "rb") as audio_file:
+                        transcript = client.audio.transcriptions.create(
+                            model=transcription_model,
+                            file=(Path(audio_path).name, audio_file, "audio/m4a"),
+                            language=transcription_language
+                        )
+                else:
+                    with open(audio_path, "rb") as audio_file:
+                        transcript = client.audio.transcriptions.create(
+                            model=transcription_model,
+                            file=(Path(audio_path).name, audio_file, "audio/m4a")
+                        )
+            except Exception as api_error:
+                print(f"\n❌ API Error Details:")
+                print(f"   Error Type: {type(api_error).__name__}")
+                print(f"   Error Message: {str(api_error)}")
+                if hasattr(api_error, 'response'):
+                    print(f"   Response: {api_error.response}")
+                if hasattr(api_error, 'status_code'):
+                    print(f"   Status Code: {api_error.status_code}")
+                if hasattr(api_error, 'body'):
+                    print(f"   Response Body: {api_error.body}")
+                raise
+
+            # GPT-4o returns detected language in response
+            detected_lang = getattr(transcript, 'language', transcription_language)
+            if detected_lang == 'auto' or not detected_lang:
+                detected_lang = 'en'  # Default fallback
+
+            # Convert language codes (e.g., 'english' -> 'en', 'japanese' -> 'ja')
+            lang_map = {'english': 'en', 'japanese': 'ja', 'en': 'en', 'ja': 'ja'}
+            detected_lang = lang_map.get(detected_lang.lower(), detected_lang[:2].lower())
+
+            print(f"✅ Transcription completed using {transcription_model}")
+            print(f"   Detected language: {get_language_name(detected_lang)}")
+            print(f"   Length: {len(transcript.text)} characters")
+
+            return (transcript.text, detected_lang)
 
         except Exception as e:
-            print(f"⚠️  Language detection error: {e}, defaulting to English")
-            return 'en'
+            raise Exception(f"GPT-4o transcription failed: {str(e)}")
 
-    def transcribe_audio(self, audio_path: str, language: str = 'en') -> tuple:
+    def generate_audio_summary(self, summary_text: str, video_id: int, language: str = 'en') -> tuple:
         """
-        Transcribe audio to text with specific language
+        Generate audio summary using TTS-1-HD via Rakuten AI Gateway
 
         Args:
-            audio_path: Path to audio file
+            summary_text: Text summary to convert to speech
+            video_id: Video ID for generating unique filename
             language: ISO 639-1 language code ('en', 'ja')
 
         Returns:
-            Tuple of (transcription_text, method_used)
+            Tuple of (audio_file_path, duration_in_seconds)
         """
         try:
-            text = self._transcribe_with_azure_speech(audio_path, language)
-            return (text, 'azure_speech')
-        except Exception as azure_error:
-            print(f"⚠️  Azure Speech failed: {azure_error}")
-            try:
-                text = self._transcribe_with_azure_whisper(audio_path, language)
-                return (text, 'azure_whisper')
-            except Exception as whisper_error:
-                print(f"⚠️  Azure Whisper failed: {whisper_error}")
-                try:
-                    text = self._transcribe_with_local_whisper(audio_path, language)
-                    return (text, 'local_whisper')
-                except Exception as local_error:
-                    raise Exception(f"All transcription methods failed. Last error: {str(local_error)}")
+            tts_model = config('OPENAI_TTS_MODEL', default='tts-1-hd')
+            tts_voice = config('OPENAI_TTS_VOICE', default='nova')
+            tts_speed = float(config('OPENAI_TTS_SPEED', default='1.0'))
 
-    def _transcribe_with_azure_speech(self, audio_path: str, language: str = 'en') -> str:
-        """
-        Transcribe using Azure Speech Services with specified language
+            print(f"🔊 Generating audio summary using {tts_model}...")
+            print(f"   Voice: {tts_voice}, Speed: {tts_speed}x")
 
-        Args:
-            audio_path: Path to audio file
-            language: ISO 639-1 language code ('en', 'ja')
-
-        Returns:
-            Transcription text
-        """
-        speech_key = config('AZURE_SPEACH_KEY')  # Note: keeping the typo from your env file
-        service_region = config('AZURE_REGION', default='eastus')
-
-        speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=service_region)
-        speech_config.speech_recognition_language = get_azure_language_code(language)
-
-        # Enable profanity filter and other optimizations
-        speech_config.enable_dictation()
-        speech_config.request_word_level_timestamps()
-
-        audio_config = speechsdk.audio.AudioConfig(filename=audio_path)
-        speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
-
-        # For longer files, use continuous recognition
-        done = False
-        recognized_text = []
-        recognition_error = None
-
-        def stop_cb(evt):
-            nonlocal done
-            done = True
-
-        def recognized_cb(evt):
-            if evt.result.text:
-                recognized_text.append(evt.result.text)
-
-        def canceled_cb(evt):
-            nonlocal recognition_error
-            if evt.reason == speechsdk.CancellationReason.Error:
-                recognition_error = evt.error_details
-
-        speech_recognizer.recognized.connect(recognized_cb)
-        speech_recognizer.session_stopped.connect(stop_cb)
-        speech_recognizer.canceled.connect(canceled_cb)
-
-        print(f"🎤 Starting transcription using Azure Speech ({get_language_name(language)})...")
-        speech_recognizer.start_continuous_recognition()
-
-        # Wait for completion with reduced polling interval
-        import time
-        timeout = 600  # 10 minutes timeout for longer videos
-        elapsed = 0
-        while not done and elapsed < timeout:
-            time.sleep(0.1)  # Reduced from 0.5 to 0.1 for faster completion detection
-            elapsed += 0.1
-
-        speech_recognizer.stop_continuous_recognition()
-
-        if recognition_error:
-            raise Exception(f"Speech recognition error: {recognition_error}")
-
-        if not recognized_text:
-            raise Exception("No speech could be recognized in the audio file")
-
-        print(f"✅ Transcription completed using Azure Speech")
-        return " ".join(recognized_text)
-
-    def _transcribe_with_azure_whisper(self, audio_path: str, language: str = 'en') -> str:
-        """
-        Transcribe using OpenAI Whisper via Rakuten AI Gateway
-
-        Args:
-            audio_path: Path to audio file
-            language: ISO 639-1 language code ('en', 'ja')
-
-        Returns:
-            Transcription text
-        """
-        print(f"🎤 Starting transcription using Azure Whisper ({get_language_name(language)})...")
-        with open(audio_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language=get_whisper_language_code(language)
+            # Generate speech using TTS-1-HD
+            response = client.audio.speech.create(
+                model=tts_model,
+                voice=tts_voice,
+                input=summary_text,
+                speed=tts_speed
             )
-        print(f"✅ Transcription completed using Azure Whisper")
-        return transcript.text
 
-    def _transcribe_with_local_whisper(self, audio_path: str, language: str = 'en') -> str:
-        """
-        Transcribe using local OpenAI Whisper
+            # Save audio file
+            audio_filename = f"summary_{video_id}.mp3"
+            audio_path = os.path.join(self.upload_dir, audio_filename)
 
-        Args:
-            audio_path: Path to audio file
-            language: ISO 639-1 language code ('en', 'ja')
+            # Write audio content to file
+            with open(audio_path, 'wb') as audio_file:
+                audio_file.write(response.content)
 
-        Returns:
-            Transcription text
-        """
-        print(f"🎤 Starting transcription using Local Whisper ({get_language_name(language)})...")
-        import whisper
-        model = whisper.load_model("base")
-        result = model.transcribe(audio_path, language=get_whisper_language_code(language))
-        print(f"✅ Transcription completed using Local Whisper")
-        return result["text"]
+            # Get audio duration using mutagen
+            audio = MP3(audio_path)
+            duration = audio.info.length
+
+            print(f"✅ Audio summary generated: {audio_filename}")
+            print(f"   Duration: {duration:.2f} seconds")
+
+            return (audio_path, duration)
+
+        except Exception as e:
+            raise Exception(f"TTS-1-HD audio generation failed: {str(e)}")
 
     def generate_summary(self, transcription: str, language: str = 'en') -> str:
         """
@@ -239,6 +202,13 @@ class VideoProcessor:
             Summary text in specified language
         """
         lang_name = get_language_name(language)
+
+        # Add language-specific instruction prefix for stronger language signal
+        language_prefix = ''
+        if language == 'ja':
+            language_prefix = '日本語で要約してください。\n\n'
+        elif language == 'en':
+            language_prefix = 'Please answer in English.\n\n'
 
         try:
             print(f"📝 Generating summary in {lang_name}...")
@@ -255,7 +225,7 @@ class VideoProcessor:
                     },
                     {
                         "role": "user",
-                        "content": f"Please summarize this video transcription:\n\n{transcription}"
+                        "content": f"{language_prefix}Please summarize this video transcription:\n\n{transcription}"
                     }
                 ],
                 max_tokens=500
@@ -308,7 +278,7 @@ class VideoProcessor:
         except Exception as e:
             raise Exception(f"Failed to answer question: {str(e)}")
 
-    def process_video(self, video_path: str, user_language: str = None, ui_language: str = 'en') -> dict:
+    def process_video(self, video_path: str, user_language: str = None, ui_language: str = 'en', video_id: int = None) -> dict:
         """
         Process video with multi-language support
 
@@ -316,9 +286,11 @@ class VideoProcessor:
             video_path: Path to video file
             user_language: User-specified language (optional, auto-detect if None or 'auto')
             ui_language: Language for UI responses (summary, Q&A) - 'en' or 'ja'
+            video_id: Video ID for generating audio summary filename (required for audio generation)
 
         Returns:
-            Dictionary with transcription, summary, detected_language, transcription_method
+            Dictionary with transcription, summary, detected_language, transcription_method,
+            audio_summary_path, audio_summary_duration
         """
         try:
             print("=" * 70)
@@ -330,41 +302,70 @@ class VideoProcessor:
             audio_path = self.extract_audio_from_video(video_path)
             print(f"✅ Audio extracted: {audio_path}")
 
-            # Detect or use specified language
-            print("\n🌍 Step 2: Language detection...")
+            # Transcribe audio with GPT-4o (includes language detection)
+            print(f"\n📝 Step 2: Transcribing audio with GPT-4o...")
             if user_language and user_language != 'auto':
-                detected_language = user_language
-                print(f"✅ Using user-specified language: {detected_language} ({get_language_name(detected_language)})")
+                print(f"   Using user-specified language: {get_language_name(user_language)}")
+                transcription, detected_language = self.transcribe_with_gpt4o(audio_path, user_language)
             else:
-                detected_language = self.detect_language(audio_path)
+                # Smart auto-detection: Use UI language as a hint when auto-detecting
+                # This improves accuracy, especially for Japanese content
+                language_hint = 'auto'
+                if ui_language and ui_language != 'en':
+                    language_hint = ui_language
+                    print(f"   Auto-detecting language with {get_language_name(ui_language)} hint...")
+                else:
+                    print(f"   Auto-detecting language...")
+                transcription, detected_language = self.transcribe_with_gpt4o(audio_path, language_hint)
 
-            # Transcribe audio in detected/specified language
-            print(f"\n📝 Step 3: Transcribing audio in {get_language_name(detected_language)}...")
-            transcription, method = self.transcribe_audio(audio_path, detected_language)
+            # Post-transcription language verification
+            # Check if transcription contains Japanese characters but was detected as English
+            if detected_language == 'en' and self._contains_japanese_chars(transcription):
+                print(f"   ⚠️  Misdetection corrected: Transcription contains Japanese characters")
+                detected_language = 'ja'
+                print(f"   ✅ Corrected language: {get_language_name(detected_language)}")
+
             print(f"✅ Transcription completed ({len(transcription)} characters)")
 
-            # Generate summary in UI language
-            print(f"\n📋 Step 4: Generating summary in {get_language_name(ui_language)}...")
+            # Generate text summary in UI language
+            print(f"\n📋 Step 3: Generating text summary in {get_language_name(ui_language)}...")
             summary = self.generate_summary(transcription, ui_language)
+
+            # Generate audio summary if video_id provided
+            audio_summary_path = None
+            audio_summary_duration = None
+            if video_id:
+                print(f"\n🔊 Step 4: Generating audio summary in {get_language_name(ui_language)}...")
+                try:
+                    audio_summary_path, audio_summary_duration = self.generate_audio_summary(
+                        summary, video_id, ui_language
+                    )
+                except Exception as audio_error:
+                    print(f"⚠️  Audio summary generation failed: {audio_error}")
+                    # Continue without audio summary
 
             # Clean up audio file
             if os.path.exists(audio_path):
                 os.remove(audio_path)
-                print(f"🗑️  Cleaned up temporary audio file")
+                print(f"\n🗑️  Cleaned up temporary audio file")
 
             print("\n" + "=" * 70)
             print("✅ VIDEO PROCESSING COMPLETED SUCCESSFULLY")
             print("=" * 70)
             print(f"   Video Language: {get_language_name(detected_language)}")
             print(f"   UI Language: {get_language_name(ui_language)}")
-            print(f"   Transcription Method: {method}")
+            print(f"   Transcription Method: gpt-4o-transcribe")
+            if audio_summary_path:
+                print(f"   Audio Summary: Generated ({audio_summary_duration:.2f}s)")
             print("=" * 70 + "\n")
 
             return {
                 "transcription": transcription,
                 "summary": summary,
                 "detected_language": detected_language,
-                "transcription_method": method
+                "transcription_method": "gpt-4o-transcribe",
+                "audio_summary_path": audio_summary_path,
+                "audio_summary_duration": audio_summary_duration
             }
         except Exception as e:
             # Clean up audio file on error

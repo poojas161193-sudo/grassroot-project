@@ -26,6 +26,7 @@ const translations = {
         detectedLanguage: "Detected Language:",
         transcriptionMethod: "Transcription Method:",
         summary: "Summary",
+        audioSummary: "Audio Summary",
 
         // Chat section
         chatTitle: "Ask Questions",
@@ -40,6 +41,11 @@ const translations = {
         keyPoints: "10 Key Points",
         detailedSummary: "Detailed Summary",
         askAnyQuestion: "Ask Any Question",
+
+        // Quick action questions (full text)
+        create10QAQuestion: "Create 10 Question-Answer pairs from the video content",
+        keyPointsQuestion: "List 10 key highlighted points from the video",
+        detailedSummaryQuestion: "Provide a detailed summary of the video",
 
         // Status messages
         uploadSuccess: "Video uploaded successfully!",
@@ -79,6 +85,7 @@ const translations = {
         detectedLanguage: "検出された言語:",
         transcriptionMethod: "文字起こし方法:",
         summary: "要約",
+        audioSummary: "音声要約",
 
         // チャットセクション
         chatTitle: "質問する",
@@ -93,6 +100,11 @@ const translations = {
         keyPoints: "10個の重要ポイント",
         detailedSummary: "詳細な要約",
         askAnyQuestion: "任意の質問をする",
+
+        // クイックアクションの質問（全文）
+        create10QAQuestion: "ビデオコンテンツから10個の質問と回答のペアを作成してください",
+        keyPointsQuestion: "ビデオから10個の重要なポイントをリストアップしてください",
+        detailedSummaryQuestion: "ビデオの詳細な要約を提供してください",
 
         // ステータスメッセージ
         uploadSuccess: "ビデオが正常にアップロードされました！",
